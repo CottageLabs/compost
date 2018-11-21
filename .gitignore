@@ -1,3 +1,5 @@
 .idea/
 example/build
 example/output
+compost.egg-info/
+*.pyc

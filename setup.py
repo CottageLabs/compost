@@ -11,5 +11,10 @@ setup(
     author_email = 'richard@cottagelabs.com',
     description = 'A static site generator for more technical needs',
     license = 'Apache2',
-    classifiers = []
+    classifiers = [],
+    entry_points = {
+        'console_scripts': [
+            'compost=compost.compost:main',
+        ],
+    }
 )

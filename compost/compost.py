@@ -1,18 +1,17 @@
-import os, shutil, codecs
+import os, shutil, codecs, json
 from jinja2 import Environment, select_autoescape, FileSystemLoader
+import models
 
 def run(config):
     _clean_directories(config)
     _generate_stage(config)
     _copy_assets(config)
-    # _unprocessed_sources(config)
-    # _expand_stage(config)
     _compile_templates(config)
 
 
 def _clean_directories(config):
-    bd = config.get("build_dir")
-    od = config.get("out_dir")
+    bd = config.build_dir()
+    od = config.out_dir()
     if os.path.exists(bd):
         shutil.rmtree(bd)
     if os.path.exists(od):
@@ -43,15 +42,16 @@ def _generate_stage(config):
     pass
 
 def _copy_assets(config):
-    src_dir = config.get("src_dir")
+    src_dir = config.src_dir()
     source = os.path.join(src_dir, "assets")
-    od = config.get("out_dir")
+    od = config.out_dir()
     target = os.path.join(od, "assets")
     shutil.copytree(source, target)
 
 def _compile_templates(config):
-    pages_path = os.path.join(config["src_dir"], "content", "pages")
-    templates_path = os.path.join(config["src_dir"], "templates")
+    src_dir = config.src_dir()
+    pages_path = os.path.join(src_dir, "content", "pages")
+    templates_path = os.path.join(src_dir, "templates")
     env = Environment(
         loader=FileSystemLoader([pages_path, templates_path]),
         autoescape=select_autoescape(['html'])
@@ -62,11 +62,23 @@ def _compile_templates(config):
     for page in pages:
         template = env.get_template(page)
         rendered = template.render()
-        with codecs.open(os.path.join(config["out_dir"], page), "wb", "utf-8") as f:
+        with codecs.open(os.path.join(config.out_dir(), page), "wb", "utf-8") as f:
             f.write(rendered)
 
-run({
-    "src_dir" : "example/source",
-    "out_dir" : "example/output",
-    "build_dir" : "example/build"
-})
+def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", "--config", help="config file for build")
+    args = parser.parse_args()
+
+    baseDir = os.path.dirname(args.config)
+
+    with codecs.open(args.config) as f:
+        config = json.loads(f.read())
+
+    config["base_dir"] = baseDir
+    config = models.Config(config)
+    run(config)
+
+if __name__ == "__main__":
+    main()
