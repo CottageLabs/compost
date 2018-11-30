@@ -1,12 +1,13 @@
 import os, shutil, codecs, json
 from jinja2 import Environment, select_autoescape, FileSystemLoader
-import models
+from compost import models
 
 def run(config):
     _clean_directories(config)
+    data = _load_data(config)
     _generate_stage(config)
     _copy_assets(config)
-    _compile_templates(config)
+    _compile_templates(config, data)
 
 
 def _clean_directories(config):
@@ -37,6 +38,15 @@ def _clean_directories(config):
     if not os.path.exists(generate_dir):
         os.mkdir(generate_dir)
 
+def _load_data(config):
+    dd = os.path.join(config.src_dir(), "data")
+    files = os.listdir(dd)
+    data = models.Data(config)
+    for file in files:
+        data_file = os.path.join(dd, file)
+        data.add_ref(data_file)
+    return data
+
 def _generate_stage(config):
     """Not specified yet"""
     pass
@@ -48,20 +58,21 @@ def _copy_assets(config):
     target = os.path.join(od, "assets")
     shutil.copytree(source, target)
 
-def _compile_templates(config):
+def _compile_templates(config, data):
     src_dir = config.src_dir()
-    pages_path = os.path.join(src_dir, "content", "pages")
+    content_path = os.path.join(src_dir, "content")
     templates_path = os.path.join(src_dir, "templates")
     env = Environment(
-        loader=FileSystemLoader([pages_path, templates_path]),
+        loader=FileSystemLoader([content_path, templates_path]),
         autoescape=select_autoescape(['html'])
     )
 
+    pages_path = os.path.join(content_path, "pages")
     pages = [f for f in os.listdir(pages_path) if os.path.isfile(os.path.join(pages_path, f))]
 
     for page in pages:
-        template = env.get_template(page)
-        rendered = template.render()
+        template = env.get_template(os.path.join("pages", page))
+        rendered = template.render(data=data)
         with codecs.open(os.path.join(config.out_dir(), page), "wb", "utf-8") as f:
             f.write(rendered)
 
