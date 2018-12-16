@@ -1,8 +1,10 @@
 import os, shutil, codecs, json
 from jinja2 import Environment, select_autoescape, FileSystemLoader
 from compost import models
+from compost import utils
+from compost import watcher
 
-def run(config):
+def build(config):
     _clean_directories(config)
     data = _load_data(config)
     _generate_stage(config)
@@ -15,10 +17,20 @@ def _clean_directories(config):
     od = config.out_dir()
     if os.path.exists(bd):
         shutil.rmtree(bd)
-    if os.path.exists(od):
-        shutil.rmtree(od)
     os.mkdir(bd)
-    os.mkdir(od)
+
+    if os.path.exists(od):
+        for the_file in os.listdir(od):
+            file_path = os.path.join(od, the_file)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print(e)
+    else:
+        os.mkdir(od)
 
     generate_dir = os.path.join(bd, "generate")
     """
@@ -66,20 +78,31 @@ def _compile_templates(config, data):
         loader=FileSystemLoader([content_path, templates_path]),
         autoescape=select_autoescape(['html'])
     )
+    env.globals.update(
+        data=data,
+        url_for=utils.url_for
+    )
 
     pages_path = os.path.join(content_path, "pages")
     pages = [f for f in os.listdir(pages_path) if os.path.isfile(os.path.join(pages_path, f))]
 
     for page in pages:
         template = env.get_template(os.path.join("pages", page))
-        rendered = template.render(data=data)
+        rendered = template.render()
         with codecs.open(os.path.join(config.out_dir(), page), "wb", "utf-8") as f:
             f.write(rendered)
+
+def build_closure(config):
+    def build_callback(report):
+        print report
+        build(config)
+    return build_callback
 
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", help="config file for build")
+    parser.add_argument("mode", help="operational mode for compost: build, integrate, serve")
+    parser.add_argument("config", help="config file for this run")
     args = parser.parse_args()
 
     baseDir = os.path.dirname(args.config)
@@ -89,7 +112,13 @@ def main():
 
     config["base_dir"] = baseDir
     config = models.Config(config)
-    run(config)
+
+    if args.mode == "build":
+        build(config)
+    elif args.mode == "integrate":
+        watcher.watch(config.src_dir(), build_closure(config))
+    else:
+        print "Unrecognised mode"
 
 if __name__ == "__main__":
     main()
