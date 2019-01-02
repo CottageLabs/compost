@@ -1,5 +1,5 @@
 import os
-from compost import exceptions, plugin
+from compost import exceptions, plugin, functions
 
 class Config(object):
     def __init__(self, raw):
@@ -62,9 +62,11 @@ class DataSource(object):
     def __init__(self, info, config):
         self._info = info
         self._config = config
+        self._filter = None
+        self._sort = None
 
     def __iter__(self):
-        pass
+        return self
 
     def __next__(self):
         pass
@@ -74,4 +76,51 @@ class DataSource(object):
         if isinstance(self, klazz):
             return self
         return klazz(self._info, self._config)
+
+    def filter(self, filter_settings):
+        self._filter = filter_settings
+        return self
+
+    def include_record(self, record):
+        pass
+
+    def sort(self, sort_settings):
+        self._sort = sort_settings
+        return self
+
+
+class TableDataSource(DataSource):
+    pass
+
+class DictDataSource(DataSource):
+
+    def __init__(self, *args, **kwargs):
+        super(DictDataSource, self).__init__(*args, **kwargs)
+        self._filter_fn = None
+        self._sort_fn_dir = (None, None)
+
+    def filter(self, filter_settings):
+        super(DictDataSource, self).filter(filter_settings)
+        self._filter_fn = None
+        if callable(self._filter):
+            self._filter_fn = self._filter
+        else:
+            self._filter_fn = functions.default_dict_filter(self._filter)
+        return self
+
+    def sort(self, sort_settings):
+        super(DictDataSource, self).sort(sort_settings)
+        self._sort_fn = None
+        if callable(self._sort):
+            self._sort_fn_dir = self._sort()
+        else:
+            self._sort_fn_dir = functions.default_dict_sort(self._sort)
+        return self
+
+    def include_record(self, record):
+        if self._filter_fn is not None:
+            return self._filter_fn(record)
+        return True
+
+
 
