@@ -1,8 +1,12 @@
-import os
-from compost import exceptions, plugin, functions
+import os, json, codecs
+from compost import exceptions, plugin, functions, utils
 
 class Config(object):
-    def __init__(self, raw):
+    def __init__(self, local):
+        baseconfig = utils.rel2abs(__file__, "baseconfig.json")
+        with codecs.open(baseconfig, "r", "utf-8") as f:
+            base = json.loads(f.read())
+        raw = utils.merge_dicts(base, local)
         self._raw = raw
 
     def build_dir(self):

@@ -80,7 +80,7 @@ def _compile_templates(config, data):
     )
     env.globals.update(
         data=data,
-        url_for=utils.url_for
+        url_for=utils.get_url_for(config)
     )
 
     pages_path = os.path.join(content_path, "pages")
@@ -112,6 +112,7 @@ def main():
 
     config["base_dir"] = baseDir
     config = models.Config(config)
+    print config._raw
 
     if args.mode == "build":
         build(config)

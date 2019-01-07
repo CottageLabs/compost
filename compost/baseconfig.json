@@ -1,0 +1,25 @@
+{
+	"base_dir" : ".",
+    "src_dir" : "source",
+    "out_dir" : "serve",
+    "build_dir" : "build",
+    "base_url" : "localhost",
+
+    "plugins" : {
+        "data" : {
+            "csv" : {
+                "shapes" : {
+                    "table" : "compost.datasources.csvsources.TableCSVDataSource",
+                    "dict" : "compost.datasources.csvsources.DictCSVDataSource"
+                },
+                "default" : "table"
+            }
+        }
+    },
+    "utils" : {
+        "url_for" : {
+            "include_base_url" : false,
+            "include_file_suffix" : false
+        }
+    }
+}
