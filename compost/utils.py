@@ -1,15 +1,18 @@
 import os
 
-def get_url_for(config):
+from compost.context import context
 
-    def url_for(source_file, anchor=None):
-        base = "/"
-        url = base + source_file
-        if anchor is not None:
-            url = "#" + anchor
-        return url
-
-    return url_for
+def url_for(source_file, anchor=None):
+    base = "/"
+    settings = context.config.util_properties("url_for")
+    if settings.get("include_base_url", True):
+        base = context.config.base_url
+    if not settings.get("include_file_suffix", True):
+        source_file = source_file.rsplit(".", 1)[0]
+    url = base + source_file
+    if anchor is not None:
+        url = "#" + anchor
+    return url
 
 
 def rel2abs(file, *args):

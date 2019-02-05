@@ -3,16 +3,19 @@ from jinja2 import Environment, select_autoescape, FileSystemLoader
 from compost import models
 from compost import utils
 from compost import watcher
+from compost.context import context
 
-def build(config):
-    _clean_directories(config)
-    data = _load_data(config)
-    _generate_stage(config)
-    _copy_assets(config)
-    _compile_templates(config, data)
+def build():
+    _clean_directories()
+    _load_data()
+    _generate_stage()
+    _copy_assets()
+    _compile_templates()
+    _render_sections()
 
 
-def _clean_directories(config):
+def _clean_directories():
+    config = context.config
     bd = config.build_dir()
     od = config.out_dir()
     if os.path.exists(bd):
@@ -33,44 +36,39 @@ def _clean_directories(config):
         os.mkdir(od)
 
     generate_dir = os.path.join(bd, "generate")
-    """
-    expand_dir = os.path.join(bd, "expand")
-    number_dir = os.path.join(bd, "number")
-    index_dir = os.path.join(bd, "index")
-    integrate_dir = os.path.join(bd, "integrate")
-    if not os.path.exists(expand_dir):
-        os.mkdir(expand_dir)
-    if not os.path.exists(number_dir):
-        os.mkdir(number_dir)
-    if not os.path.exists(index_dir):
-        os.mkdir(index_dir)
-    if not os.path.exists(integrate_dir):
-        os.mkdir(integrate_dir)
-    """
     if not os.path.exists(generate_dir):
         os.mkdir(generate_dir)
 
-def _load_data(config):
+    post_template_dir = os.path.join(bd, "post_template")
+    if not os.path.exists(post_template_dir):
+        os.mkdir(post_template_dir)
+
+def _load_data():
+    config = context.config
     dd = os.path.join(config.src_dir(), "data")
     files = os.listdir(dd)
     data = models.Data(config)
     for file in files:
         data_file = os.path.join(dd, file)
         data.add_ref(data_file)
-    return data
+    context.data = data
 
-def _generate_stage(config):
+def _generate_stage():
     """Not specified yet"""
     pass
 
-def _copy_assets(config):
+def _copy_assets():
+    config = context.config
     src_dir = config.src_dir()
     source = os.path.join(src_dir, "assets")
     od = config.out_dir()
     target = os.path.join(od, "assets")
     shutil.copytree(source, target)
 
-def _compile_templates(config, data):
+def _compile_templates():
+    config = context.config
+    bd = config.build_dir()
+    post_template_dir = os.path.join(bd, "post_template")
     src_dir = config.src_dir()
     content_path = os.path.join(src_dir, "content")
     templates_path = os.path.join(src_dir, "templates")
@@ -79,8 +77,9 @@ def _compile_templates(config, data):
         autoescape=select_autoescape(['html'])
     )
     env.globals.update(
-        data=data,
-        url_for=utils.get_url_for(config)
+        config=context.config,
+        data=context.data,
+        url_for=utils.url_for
     )
 
     pages_path = os.path.join(content_path, "pages")
@@ -89,8 +88,11 @@ def _compile_templates(config, data):
     for page in pages:
         template = env.get_template(os.path.join("pages", page))
         rendered = template.render()
-        with codecs.open(os.path.join(config.out_dir(), page), "wb", "utf-8") as f:
+        with codecs.open(os.path.join(post_template_dir, page), "wb", "utf-8") as f:
             f.write(rendered)
+
+def _render_sections():
+    pass
 
 def build_closure(config):
     def build_callback(report):
@@ -112,7 +114,7 @@ def main():
 
     config["base_dir"] = baseDir
     config = models.Config(config)
-    print config._raw
+    context.config = config
 
     if args.mode == "build":
         build(config)

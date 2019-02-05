@@ -18,6 +18,9 @@ class Config(object):
     def src_dir(self):
         return os.path.join(self._raw.get("base_dir"), self._raw.get("src_dir"))
 
+    def base_url(self):
+        return self._raw.get("base_url")
+
     def data_config(self, filename):
         return self._raw.get("data", {}).get(filename)
 
@@ -34,6 +37,9 @@ class Config(object):
         if classpath is None:
             raise exceptions.ConfigurationException("No shape '{x}' for type '{y}'".format(x=shape, y=type))
         return plugin.load_class(classpath)
+
+    def util_properties(self, util_name):
+        return self._raw.get("utils", {}).get(util_name, {})
 
 
 class Data(object):
