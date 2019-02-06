@@ -1,6 +1,7 @@
-import os
+import os, json
 
 from compost.context import context
+
 
 def url_for(source_file, anchor=None):
     base = "/"
@@ -39,3 +40,10 @@ def merge_dicts(target, source):
         else:
             target[k] = source[k]
     return target
+
+class RendererJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        from compost.models import Renderer
+        if isinstance(o, Renderer):
+            return o.__name__
+        return o

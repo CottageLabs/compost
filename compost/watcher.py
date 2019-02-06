@@ -1,4 +1,5 @@
 import os, time
+from compost.context import context
 
 def watch(dir, callback, frequency=2):
     tree = {}

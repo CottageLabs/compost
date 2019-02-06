@@ -2,12 +2,15 @@ import os, json, codecs
 from compost import exceptions, plugin, functions, utils
 
 class Config(object):
-    def __init__(self, local):
+    def __init__(self, local=None):
         baseconfig = utils.rel2abs(__file__, "baseconfig.json")
         with codecs.open(baseconfig, "r", "utf-8") as f:
             base = json.loads(f.read())
-        raw = utils.merge_dicts(base, local)
-        self._raw = raw
+        if local is not None:
+            raw = utils.merge_dicts(base, local)
+            self._raw = raw
+        else:
+            self._raw = base
 
     def build_dir(self):
         return os.path.join(self._raw.get("base_dir"), self._raw.get("build_dir"))
@@ -37,6 +40,25 @@ class Config(object):
         if classpath is None:
             raise exceptions.ConfigurationException("No shape '{x}' for type '{y}'".format(x=shape, y=type))
         return plugin.load_class(classpath)
+
+    def renderer_for_file_suffix(self, suffix):
+        for k, v in self._raw.get("plugins", {}).get("renderer", {}).iteritems():
+            if suffix in v.get("file_suffixes", []):
+                classpath = v.get("class")
+                klazz = plugin.load_class(classpath)
+                return klazz(k)
+        return None
+
+    def renderer_for_inline_tag(self, inline_tag):
+        for k, v in self._raw.get("plugins", {}).get("renderer", {}).iteritems():
+            if inline_tag == v.get("inline_tag"):
+                classpath = v.get("class")
+                klazz = plugin.load_class(classpath)
+                return klazz(k)
+        return None
+
+    def renderer_settings(self, cfg_id):
+        return self._raw.get("plugins", {}).get("renderer", {}).get(cfg_id, {}).get("settings", {})
 
     def util_properties(self, util_name):
         return self._raw.get("utils", {}).get(util_name, {})
@@ -132,5 +154,58 @@ class DictDataSource(DataSource):
             return self._filter_fn(record)
         return True
 
+
+class Renderer(object):
+    def __init__(self, cfg_id):
+        self._cfg_id = cfg_id
+
+    def render(self, text):
+        return text
+
+
+class RenderConstruct(object):
+    def __init__(self, root_renderer):
+        self._construct = {
+            "renderer" : root_renderer,
+            "content" : []
+        }
+        self._stack = [self._construct["content"]]
+
+    def __str__(self):
+        return json.dumps(self._construct, indent=2,
+                          default=lambda o: o.__name__ if hasattr(o, "__name__") else o)
+
+    def append(self, text):
+        self._stack[-1].append({
+            "raw" : text
+        })
+
+    def push(self, renderer):
+        self._stack[-1].append({
+            "renderer" : renderer,
+            "content" : []
+        })
+        self._stack.append(self._stack[-1][-1]["content"])
+
+    def pop(self):
+        if len(self._stack) > 1:
+            del self._stack[-1]
+
+    def depth(self):
+        return len(self._stack)
+
+    def render(self):
+        def recurse(node):
+            renderer = node.get("renderer")
+            contents = node.get("content", [])
+            text = ""
+            for c in contents:
+                if "raw" in c:
+                    text += c["raw"]
+                if "renderer" in c:
+                    text += recurse(c)
+            return renderer.render(text)
+
+        return recurse(self._construct)
 
 

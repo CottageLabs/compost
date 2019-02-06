@@ -1,4 +1,4 @@
-import os, shutil, codecs, json
+import os, shutil, codecs, json, re
 from jinja2 import Environment, select_autoescape, FileSystemLoader
 from compost import models
 from compost import utils
@@ -92,12 +92,92 @@ def _compile_templates():
             f.write(rendered)
 
 def _render_sections():
-    pass
+    config = context.config
+    bd = config.build_dir()
+    post_template_dir = os.path.join(bd, "post_template")
+    pages = [f for f in os.listdir(post_template_dir) if os.path.isfile(os.path.join(post_template_dir, f))]
 
-def build_closure(config):
+    for page in pages:
+        suffix = page.rsplit(".", 1)[-1]
+        main_renderer = config.renderer_for_file_suffix(suffix)
+        with codecs.open(os.path.join(post_template_dir, page), "rb", "utf-8") as f:
+            content = f.read()
+
+        construct = _construct_from_text(content, main_renderer)
+        text = construct.render()
+        with codecs.open(os.path.join(config.out_dir(), page), "wb", "utf-8") as f:
+            f.write(text)
+
+
+def _construct_from_text(content, main_renderer):
+    config = context.config
+    construct = models.RenderConstruct(main_renderer)
+
+    open_tag_rx = r"\{\[([^\]/\s]+)\]\}"
+
+    tag_stack = []
+    looking_for = "open"
+
+    while len(content) > 0:
+        bits = []
+        if looking_for == "open":
+            bits = re.split(open_tag_rx, content, 1)
+        elif looking_for == "close":
+            close_tag_rx = r"\{\[/" + tag_stack[-1] + r"\]\}"
+            bits = re.split(close_tag_rx, content, 1)
+
+        if len(bits) == 1:
+            # there is no open or close tag until the end of the string
+            construct.append(bits[0])
+            content = ""
+
+        elif len(bits) == 2:
+            # we have encountered a close tag
+            construct.append(bits[0])
+            content = bits[1]
+            construct.pop()
+            del tag_stack[-1]
+
+            if len(tag_stack) == 0:
+                looking_for = "open"
+                continue
+
+            looking_for = __is_next_tag_open_or_close(tag_stack[-1], open_tag_rx, content)
+
+        elif len(bits) == 3:
+            # we have encountered an open tag
+            construct.append(bits[0])
+            r = config.renderer_for_inline_tag(bits[1])
+            construct.push(r)
+            content = bits[2]
+            tag_stack.append(bits[1])
+
+            looking_for = __is_next_tag_open_or_close(bits[1], open_tag_rx, content)
+
+    return construct
+
+def __is_next_tag_open_or_close(current_tag, open_tag_rx, content):
+    close_tag_rx = r"\{\[/" + current_tag + r"\]\}"
+    open_match = re.search(open_tag_rx, content)
+    close_match = re.search(close_tag_rx, content)
+    open_start = -1
+    close_start = -1
+    if open_match:
+        open_start = open_match.start()
+    if close_match:
+        close_start = close_match.start()
+    else:
+        close_start = len(content)
+
+    if open_start > -1 and open_start < close_start:
+        return "open"
+    else:
+        return "close"
+
+def build_closure():
     def build_callback(report):
         print report
-        build(config)
+        build()
     return build_callback
 
 def main():
@@ -117,9 +197,9 @@ def main():
     context.config = config
 
     if args.mode == "build":
-        build(config)
+        build()
     elif args.mode == "integrate":
-        watcher.watch(config.src_dir(), build_closure(config))
+        watcher.watch(config.src_dir(), build_closure())
     else:
         print "Unrecognised mode"
 

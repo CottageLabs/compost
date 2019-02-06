@@ -14,6 +14,24 @@
                 },
                 "default" : "table"
             }
+        },
+        "renderer" : {
+            "html" : {
+                "file_suffixes" : ["htm", "html"],
+                "inline_tag" : "html",
+                "class" : "compost.renderers.html.HTMLRenderer"
+            },
+            "md" : {
+                "file_suffixes" : ["md"],
+                "inline_tag" : "md",
+                "class" : "compost.renderers.md.MarkdownRenderer",
+                "settings" : {
+                    "extensions" : [
+                        "markdown.extensions.tables",
+                        "markdown.extensions.fenced_code"
+                    ]
+                }
+            }
         }
     },
     "utils" : {
