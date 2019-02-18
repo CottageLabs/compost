@@ -4,6 +4,7 @@ from compost import models
 from compost import utils
 from compost import watcher
 from compost.context import context
+from datetime import datetime
 
 def build():
     _clean_directories()
@@ -176,8 +177,12 @@ def __is_next_tag_open_or_close(current_tag, open_tag_rx, content):
 
 def build_closure():
     def build_callback(report):
+        print datetime.now()
         print report
-        build()
+        try:
+            build()
+        except Exception as e:
+            print e.message
     return build_callback
 
 def main():
