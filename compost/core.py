@@ -83,20 +83,34 @@ def _compile_templates():
         url_for=utils.url_for
     )
 
+    pages = []
     pages_path = os.path.join(content_path, "pages")
-    pages = [f for f in os.listdir(pages_path) if os.path.isfile(os.path.join(pages_path, f))]
+    for dirpath, dirnames, filenames in os.walk(pages_path):
+        for fn in filenames:
+            sub_path = dirpath[len(pages_path) + 1:]
+            pages.append(os.path.join(sub_path, fn))
 
     for page in pages:
         template = env.get_template(os.path.join("pages", page))
         rendered = template.render()
-        with codecs.open(os.path.join(post_template_dir, page), "wb", "utf-8") as f:
+        outfile = os.path.join(post_template_dir, page)
+        outdir = os.path.dirname(outfile)
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        with codecs.open(outfile, "wb", "utf-8") as f:
             f.write(rendered)
 
 def _render_sections():
     config = context.config
     bd = config.build_dir()
     post_template_dir = os.path.join(bd, "post_template")
-    pages = [f for f in os.listdir(post_template_dir) if os.path.isfile(os.path.join(post_template_dir, f))]
+
+    pages = []
+    pages_path = os.path.join(post_template_dir)
+    for dirpath, dirnames, filenames in os.walk(pages_path):
+        for fn in filenames:
+            sub_path = dirpath[len(pages_path) + 1:]
+            pages.append(os.path.join(sub_path, fn))
 
     for page in pages:
         suffix = page.rsplit(".", 1)[-1]
@@ -106,7 +120,11 @@ def _render_sections():
 
         construct = _construct_from_text(content, main_renderer)
         text = construct.render()
-        with codecs.open(os.path.join(config.out_dir(), page), "wb", "utf-8") as f:
+        outpath = os.path.join(config.out_dir(), page)
+        outdir = os.path.dirname(outpath)
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        with codecs.open(outpath, "wb", "utf-8") as f:
             f.write(text)
 
 
