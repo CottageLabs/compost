@@ -24,7 +24,7 @@ def rel2abs(file, *args):
 
 
 def merge_dicts(target, source):
-    for k, v in source.iteritems():
+    for k, v in source.items():
         if k in target:
             if isinstance(target[k], dict):
                 if isinstance(source[k], dict):

@@ -42,7 +42,7 @@ class Config(object):
         return plugin.load_class(classpath)
 
     def renderer_for_file_suffix(self, suffix):
-        for k, v in self._raw.get("plugins", {}).get("renderer", {}).iteritems():
+        for k, v in self._raw.get("plugins", {}).get("renderer", {}).items():
             if suffix in v.get("file_suffixes", []):
                 classpath = v.get("class")
                 klazz = plugin.load_class(classpath)
@@ -50,7 +50,7 @@ class Config(object):
         return None
 
     def renderer_for_inline_tag(self, inline_tag):
-        for k, v in self._raw.get("plugins", {}).get("renderer", {}).iteritems():
+        for k, v in self._raw.get("plugins", {}).get("renderer", {}).items():
             if inline_tag == v.get("inline_tag"):
                 classpath = v.get("class")
                 klazz = plugin.load_class(classpath)

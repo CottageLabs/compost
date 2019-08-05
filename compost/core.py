@@ -5,6 +5,7 @@ from compost import utils
 from compost import watcher
 from compost.context import context
 from datetime import datetime
+import traceback
 
 def build():
     _clean_directories()
@@ -33,6 +34,7 @@ def _clean_directories():
                     shutil.rmtree(file_path)
             except Exception as e:
                 print(e)
+                traceback.print_exc()
     else:
         os.mkdir(od)
 
@@ -195,12 +197,13 @@ def __is_next_tag_open_or_close(current_tag, open_tag_rx, content):
 
 def build_closure():
     def build_callback(report):
-        print datetime.now()
-        print report
+        print(datetime.now())
+        print(report)
         try:
             build()
         except Exception as e:
-            print e.message
+            print(e)
+            traceback.print_exc()
     return build_callback
 
 def main():
@@ -224,7 +227,7 @@ def main():
     elif args.mode == "integrate":
         watcher.watch(config.src_dir(), build_closure())
     else:
-        print "Unrecognised mode"
+        print("Unrecognised mode")
 
 if __name__ == "__main__":
     main()

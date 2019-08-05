@@ -10,12 +10,15 @@ class UTF8Recoder:
     def __iter__(self):
         return self
 
+    def __next__(self):
+        return self.next()
+
     def next(self):
-        val = self.reader.next()
+        val = self.reader.__next__()
         raw = val.encode("utf-8")
         if raw.startswith(codecs.BOM_UTF8):
             raw = raw.replace(codecs.BOM_UTF8, '', 1)
-        return raw
+        return raw.decode("utf-8")
 
 class UnicodeReader:
     """
@@ -27,9 +30,11 @@ class UnicodeReader:
         f = UTF8Recoder(f, encoding)
         self.reader = csv.reader(f, dialect=dialect, **kwds)
 
+    def __next__(self):
+        return self.next()
+
     def next(self):
-        row = self.reader.next()
-        return [unicode(s, "utf-8") for s in row]
+        return self.reader.__next__()
 
     def __iter__(self):
         return self

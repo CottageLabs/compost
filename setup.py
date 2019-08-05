@@ -14,7 +14,7 @@ setup(
     classifiers = [],
     entry_points = {
         'console_scripts': [
-            'compost=compost.compost:main',
+            'compost=compost.core:main',
         ],
     }
 )

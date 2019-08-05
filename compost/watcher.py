@@ -21,13 +21,13 @@ def watch(dir, callback, frequency=2):
         }
 
         # now compare new tree to old tree
-        for filepath, mod in newtree.iteritems():
+        for filepath, mod in newtree.items():
             if filepath not in tree:
                 report["new"].append(filepath)
             else:
                 if newtree[filepath] != tree[filepath]:
                     report["modified"].append(filepath)
-        for filepath, mod in tree.iteritems():
+        for filepath, mod in tree.items():
             if filepath not in newtree:
                 report["removed"].append(filepath)
 
