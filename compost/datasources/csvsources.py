@@ -20,6 +20,9 @@ class TableCSVDataSource(models.TableDataSource):
             local_data["data"].append(row)
         return self
 
+    def __next__(self):
+        return self.next()
+
     def next(self):
         local_data = self._info["shapes"]["table"]
         idx = local_data["idx"]
@@ -39,30 +42,14 @@ class DictCSVDataSource(models.DictDataSource):
         self._info["shapes"]["dict"] = {}
 
     def __iter__(self):
-        local_data = self._info["shapes"]["dict"]
-        local_data["idx"] = 0
-        if "data" in local_data:
-            return self
-
-        with codecs.open(self._info.get("path"), "rb", "utf-8") as f:
-            reader = utf8csv.UnicodeReader(f)
-            headers = reader.next()
-            local_data["data"] = []
-            for row in reader:
-                obj = {}
-                for i in range(len(headers)):
-                    obj[headers[i]] = row[i]
-                local_data["data"].append(obj)
-
-        if self._sort is not None:
-            local_data["data"].sort(key=self._sort_fn_dir[0], reverse=self._sort_fn_dir[1])
-
+        self._prep_iterator()
         return self
 
     def __next__(self):
         return self.next()
 
     def next(self):
+        self._prep_iterator()
         local_data = self._info["shapes"]["dict"]
 
         def get_next_record():
@@ -80,3 +67,22 @@ class DictCSVDataSource(models.DictDataSource):
             rec = get_next_record()
             if rec != False:
                 return rec
+
+    def _prep_iterator(self):
+        local_data = self._info["shapes"]["dict"]
+        if "data" in local_data:
+            return
+
+        local_data["idx"] = 0
+        with codecs.open(self._info.get("path"), "rb", "utf-8") as f:
+            reader = utf8csv.UnicodeReader(f)
+            headers = reader.next()
+            local_data["data"] = []
+            for row in reader:
+                obj = {}
+                for i in range(len(headers)):
+                    obj[headers[i]] = row[i]
+                local_data["data"].append(obj)
+
+        if self._sort is not None:
+            local_data["data"].sort(key=self._sort_fn_dir[0], reverse=self._sort_fn_dir[1])
