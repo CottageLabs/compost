@@ -31,6 +31,17 @@
                         "markdown.extensions.fenced_code"
                     ]
                 }
+            },
+            "md-inline" : {
+                "file_suffixes" : [],
+                "inline_tag" : "mdin",
+                "class" : "compost.renderers.md.MarkdownInlineRenderer",
+                "settings" : {
+                    "extensions" : [
+                        "markdown.extensions.tables",
+                        "markdown.extensions.fenced_code"
+                    ]
+                }
             }
         }
     },
