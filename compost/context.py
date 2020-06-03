@@ -2,6 +2,7 @@ class Context(object):
     def __init__(self):
         self._config = None
         self._data = None
+        self._runtime_store = {}
 
     @property
     def config(self):
@@ -18,5 +19,11 @@ class Context(object):
     @data.setter
     def data(self, data):
         self._data = data
+
+    def remember(self, key, value):
+        self._runtime_store[key] = value
+
+    def recall(self, key, default=None):
+        return self._runtime_store.get(key, default)
 
 context = Context()

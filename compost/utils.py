@@ -3,6 +3,10 @@ import os, json
 from compost.context import context
 from datetime import datetime
 
+###############################################
+## Template Functions/Filters
+###############################################
+
 def url_for(source_file, anchor=None):
     base = "/"
     settings = context.config.util_properties("url_for")
@@ -21,7 +25,48 @@ def now(format):
 
 
 def toc():
-    return "{{ toc }}"
+    toc = context.recall("toc")
+    if toc is None:
+        return "{{ toc() }}"
+
+    numbers = list(toc.keys())
+    numbers.sort(key=lambda s: [int(u) for u in s.split('.') if u.strip() != ""])
+    frag = "{% markdown %}"
+    for n in numbers:
+        indent = len(n.split(".")) - 2
+        frag += "\t" * indent + "* [" + n + ". " + toc[n] + "](#" + n + ")\n"
+    frag += "{% endmarkdown %}"
+    return frag
+
+
+def ref(reference):
+    """Insert a link to a reference in some unspecified references section"""
+    def _anchor_name(v):
+        v = v.lower().strip()
+        return v.replace(" ", "_")
+
+    records = context.data.get("references").shape("dict")
+    for entry in records:
+        if entry.get("ID") == reference:
+            return "[[" + reference + "](#" + _anchor_name(reference) + ")]"
+
+
+def section(section_name, subsection=""):
+    current_major_section = context.recall("current_major_section", 0)
+    new_major_section = current_major_section + 1
+    context.remember("current_major_section", new_major_section)
+    if subsection != "":
+        subsection = "." + subsection
+    section_number = str(new_major_section) + subsection
+
+    toc = context.recall("toc", {})
+    toc[section_number] = section_name
+    context.remember("toc", toc)
+
+    return '<a name="' + section_number + '"></a>' + section_number + " " + section_name
+
+
+###############################################
 
 
 def rel2abs(file, *args):

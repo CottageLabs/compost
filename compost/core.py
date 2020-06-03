@@ -118,14 +118,24 @@ def _compile_templates():
             pages.append(os.path.join(sub_path, fn))
 
     for page in pages:
+        # render the template from file the first time
         template = env.get_template(os.path.join("pages", page))
-        rendered = template.render()
+        two = template.render()
+        one = ""
+
+        # now keep rendering until we have rendered everything renderable
+        while one != two:
+            one = two
+            template = env.from_string(one)
+            two = template.render()
+
         outfile = os.path.join(post_template_dir, page)
         outdir = os.path.dirname(outfile)
         if not os.path.exists(outdir):
             os.makedirs(outdir)
         with codecs.open(outfile, "wb", "utf-8") as f:
-            f.write(rendered)
+            f.write(two)
+
 
 def _finish():
     config = context.config

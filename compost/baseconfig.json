@@ -52,6 +52,12 @@
         },
         "toc" : {
             "function" : "compost.utils.toc"
+        },
+        "ref" : {
+            "function" : "compost.utils.ref"
+        },
+        "section" : {
+            "function" : "compost.utils.section"
         }
     }
 }
