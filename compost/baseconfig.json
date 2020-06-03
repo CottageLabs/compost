@@ -16,14 +16,10 @@
             }
         },
         "renderer" : {
-            "html" : {
-                "file_suffixes" : ["htm", "html"],
-                "inline_tag" : "html",
-                "class" : "compost.renderers.html.HTMLRenderer"
-            },
             "md" : {
                 "file_suffixes" : ["md"],
-                "inline_tag" : "md",
+                "jinja2_tag" : "markdown",
+                "jinja2_extension" : "compost.renderers.md.MarkdownExtension",
                 "class" : "compost.renderers.md.MarkdownRenderer",
                 "settings" : {
                     "extensions" : [
@@ -47,8 +43,15 @@
     },
     "utils" : {
         "url_for" : {
+            "function" : "compost.utils.url_for",
             "include_base_url" : false,
             "include_file_suffix" : false
+        },
+        "now" : {
+            "function" : "compost.utils.now"
+        },
+        "toc" : {
+            "function" : "compost.utils.toc"
         }
     }
 }

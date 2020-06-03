@@ -6,6 +6,9 @@ from compost import watcher
 from compost.context import context
 from datetime import datetime
 import traceback
+from compost import plugin
+from compost.jinja2_extensions import MarkupWrapperLoader
+
 
 def build():
     _clean_directories()
@@ -13,7 +16,8 @@ def build():
     _generate_stage()
     _copy_assets()
     _compile_templates()
-    _render_sections()
+    # _render_sections()
+    _finish()
 
 
 def _clean_directories():
@@ -49,6 +53,8 @@ def _clean_directories():
 def _load_data():
     config = context.config
     dd = os.path.join(config.src_dir(), "data")
+    if not os.path.exists(dd):
+        return
     files = os.listdir(dd)
     data = models.Data(config)
     for file in files:
@@ -64,6 +70,8 @@ def _copy_assets():
     config = context.config
     src_dir = config.src_dir()
     source = os.path.join(src_dir, "assets")
+    if not os.path.exists(source):
+        return
     od = config.out_dir()
     target = os.path.join(od, "assets")
     shutil.copytree(source, target)
@@ -75,15 +83,32 @@ def _compile_templates():
     src_dir = config.src_dir()
     content_path = os.path.join(src_dir, "content")
     templates_path = os.path.join(src_dir, "templates")
+
+    # prep the extensions
+    extensions = []
+    for k, v in config.renderers().items():
+        if "jinja2_extension" in v:
+            ext_klazz = plugin.load_class(v["jinja2_extension"])
+            extensions.append(ext_klazz)
+
+    # set up the initial environment with the essential globals
     env = Environment(
-        loader=FileSystemLoader([content_path, templates_path]),
-        autoescape=select_autoescape(['html'])
+        loader=MarkupWrapperLoader(FileSystemLoader([content_path, templates_path]), config),
+        autoescape=select_autoescape(['html']),
+        extensions=extensions
     )
     env.globals.update(
         config=context.config,
-        data=context.data,
-        url_for=utils.url_for
+        data=context.data
     )
+
+    # add any additional globals that will be available
+    globals_def = {}
+    util_defs = config.utils()
+    for k, v in util_defs.items():
+        fn = plugin.load_function(v.get("function"))
+        globals_def[k] = fn
+    env.globals.update(**globals_def)
 
     pages = []
     pages_path = os.path.join(content_path, "pages")
@@ -102,6 +127,27 @@ def _compile_templates():
         with codecs.open(outfile, "wb", "utf-8") as f:
             f.write(rendered)
 
+def _finish():
+    config = context.config
+    bd = config.build_dir()
+    post_template_dir = os.path.join(bd, "post_template")
+
+    pages = []
+    pages_path = os.path.join(post_template_dir)
+    for dirpath, dirnames, filenames in os.walk(pages_path):
+        for fn in filenames:
+            sub_path = dirpath[len(pages_path) + 1:]
+            pages.append(os.path.join(sub_path, fn))
+
+    for page in pages:
+        outpath = os.path.join(config.out_dir(), page)
+        outdir = os.path.dirname(outpath)
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
+        shutil.copyfile(os.path.join(post_template_dir, page), outpath)
+
+
+"""
 def _render_sections():
     config = context.config
     bd = config.build_dir()
@@ -194,6 +240,7 @@ def __is_next_tag_open_or_close(current_tag, open_tag_rx, content):
         return "open"
     else:
         return "close"
+"""
 
 def build_closure():
     def build_callback(report):

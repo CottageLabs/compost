@@ -57,11 +57,29 @@ class Config(object):
                 return klazz(k)
         return None
 
+    def settings_for_file_suffix(self, suffix):
+        for k, v in self._raw.get("plugins", {}).get("renderer", {}).items():
+            if suffix in v.get("file_suffixes", []):
+                return v
+        return None
+
+    def settings_for_tag(self, tag):
+        for k, v in self._raw.get("plugins", {}).get("renderer", {}).items():
+            if tag == v.get("jinja2_tag"):
+                return v
+        return None
+
     def renderer_settings(self, cfg_id):
         return self._raw.get("plugins", {}).get("renderer", {}).get(cfg_id, {}).get("settings", {})
 
+    def renderers(self):
+        return self._raw.get("plugins", {}).get("renderer", {})
+
     def util_properties(self, util_name):
         return self._raw.get("utils", {}).get(util_name, {})
+
+    def utils(self):
+        return self._raw.get("utils", {})
 
 
 class Data(object):

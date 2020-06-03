@@ -1,7 +1,7 @@
 import os, json
 
 from compost.context import context
-
+from datetime import datetime
 
 def url_for(source_file, anchor=None):
     base = "/"
@@ -14,6 +14,14 @@ def url_for(source_file, anchor=None):
     if anchor is not None:
         url = "#" + anchor
     return url
+
+
+def now(format):
+    return datetime.utcnow().strftime(format)
+
+
+def toc():
+    return "{{ toc }}"
 
 
 def rel2abs(file, *args):
