@@ -8,11 +8,19 @@
     "plugins" : {
         "data" : {
             "csv" : {
+                "file_suffixes" : ["csv"],
                 "shapes" : {
                     "table" : "compost.datasources.csvsources.TableCSVDataSource",
                     "dict" : "compost.datasources.csvsources.DictCSVDataSource"
                 },
                 "default" : "table"
+            },
+            "json" : {
+                "file_suffixes" : ["json", "jsonld"],
+                "shapes" : {
+                    "dict" : "compost.datasources.jsonsources.DictJSONDataSource"
+                },
+                "default" : "dict"
             }
         },
         "renderer" : {
@@ -47,6 +55,11 @@
             "include_base_url" : false,
             "include_file_suffix" : false
         },
+        "export_url" : {
+            "function" : "compost.utils.export_url",
+            "include_base_url" : false,
+            "include_file_suffix" : true
+        },
         "now" : {
             "function" : "compost.utils.now"
         },
@@ -56,8 +69,25 @@
         "ref" : {
             "function" : "compost.utils.ref"
         },
-        "section" : {
-            "function" : "compost.utils.section"
+        "header" : {
+            "function" : "compost.utils.header"
+        },
+        "sections" : {
+            "function" : "compost.utils.sections"
+        },
+        "json_schema_definitions" : {
+            "function" : "compost.utils.json_schema_definitions"
+        },
+        "section_link" : {
+            "function" : "compost.utils.section_link"
+        },
+        "dl" : {
+            "function" : "compost.utils.dl"
+        },
+        "table" : {
+            "function" : "compost.utils.table"
         }
-    }
+    },
+
+    "exports" :[]
 }

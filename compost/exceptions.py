@@ -3,3 +3,6 @@ class NoSuchDataSourceException(Exception):
 
 class ConfigurationException(Exception):
     pass
+
+class InconsistentStructureException(Exception):
+    pass

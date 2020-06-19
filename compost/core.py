@@ -15,6 +15,7 @@ def build():
     _load_data()
     _generate_stage()
     _copy_assets()
+    _exports()
     _compile_templates()
     # _render_sections()
     _finish()
@@ -50,21 +51,31 @@ def _clean_directories():
     if not os.path.exists(post_template_dir):
         os.mkdir(post_template_dir)
 
+    post_markup_dir = os.path.join(bd, "post_markup")
+    if not os.path.exists(post_markup_dir):
+        os.mkdir(post_markup_dir)
+
+
 def _load_data():
     config = context.config
     dd = os.path.join(config.src_dir(), "data")
     if not os.path.exists(dd):
         return
-    files = os.listdir(dd)
+
     data = models.Data(config)
-    for file in files:
-        data_file = os.path.join(dd, file)
-        data.add_ref(data_file)
+
+    for dirpath, dirnames, filenames in os.walk(dd):
+        for fn in filenames:
+            data_file = os.path.join(dirpath, fn)
+            data.add_ref(data_file)
+
     context.data = data
+
 
 def _generate_stage():
     """Not specified yet"""
     pass
+
 
 def _copy_assets():
     config = context.config
@@ -76,10 +87,22 @@ def _copy_assets():
     target = os.path.join(od, "assets")
     shutil.copytree(source, target)
 
+
+def _exports():
+    config = context.config
+    src_dir = config.src_dir()
+    od = config.out_dir()
+    for ex in config.exports:
+        source = os.path.join(src_dir, ex.get("source"))
+        target = os.path.join(od, ex.get("target"))
+        shutil.copyfile(source, target)
+
+
 def _compile_templates():
     config = context.config
     bd = config.build_dir()
     post_template_dir = os.path.join(bd, "post_template")
+    post_markup_dir = os.path.join(bd, "post_markup")
     src_dir = config.src_dir()
     content_path = os.path.join(src_dir, "content")
     templates_path = os.path.join(src_dir, "templates")
@@ -124,6 +147,7 @@ def _compile_templates():
         one = ""
 
         # now keep rendering until we have rendered everything renderable
+        # FIXME: we should record each iteration of the template for review in the build dir
         while one != two:
             one = two
             template = env.from_string(one)
@@ -136,14 +160,49 @@ def _compile_templates():
         with codecs.open(outfile, "wb", "utf-8") as f:
             f.write(two)
 
+    # now we want to reinit the jinja environment, this time with extensions enabled
+    # set up the new environment with the essential globals and extensions
+    """
+    env = Environment(
+        loader=MarkupWrapperLoader(FileSystemLoader([content_path, templates_path]), config),
+        autoescape=select_autoescape(['html']),
+        extensions=extensions
+    )
+    env.globals.update(
+        config=context.config,
+        data=context.data
+    )
+
+    # add any additional globals that will be available
+    env.globals.update(**globals_def)
+
+    for page in pages:
+        infile = os.path.join(post_template_dir, page)
+        with open(infile) as f:
+            raw = f.read()
+
+            # rewrite the rendering tags as jinja2 tags
+            converted = re.sub(r"\{\[\s*(.+?)\s*\]\}", r"{% \1 %}", raw)
+
+            # build a template from the converted string, and render it
+            template = env.from_string(converted)
+            final = template.render()
+
+            outfile = os.path.join(post_markup_dir, page)
+            outdir = os.path.dirname(outfile)
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
+            with codecs.open(outfile, "wb", "utf-8") as g:
+                g.write(final)
+    """
 
 def _finish():
     config = context.config
     bd = config.build_dir()
-    post_template_dir = os.path.join(bd, "post_template")
+    final_dir = os.path.join(bd, "post_template")
 
     pages = []
-    pages_path = os.path.join(post_template_dir)
+    pages_path = os.path.join(final_dir)
     for dirpath, dirnames, filenames in os.walk(pages_path):
         for fn in filenames:
             sub_path = dirpath[len(pages_path) + 1:]
@@ -154,7 +213,7 @@ def _finish():
         outdir = os.path.dirname(outpath)
         if not os.path.exists(outdir):
             os.makedirs(outdir)
-        shutil.copyfile(os.path.join(post_template_dir, page), outpath)
+        shutil.copyfile(os.path.join(final_dir, page), outpath)
 
 
 """

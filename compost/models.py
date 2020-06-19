@@ -24,11 +24,24 @@ class Config(object):
     def base_url(self):
         return self._raw.get("base_url")
 
-    def data_config(self, filename):
-        return self._raw.get("data", {}).get(filename)
+    @property
+    def exports(self):
+        return self._raw.get("exports", [])
+
+    def export_target(self, source):
+        for row in self._raw.get("exports", []):
+            if row.get("source") == source:
+                return row.get("target")
+        return None
+
+    def _data_plugin_by_suffix(self, suffix):
+        for k, v in self._raw.get("plugins", {}).get("data", {}).items():
+            if suffix in v.get("file_suffixes"):
+                return v
+        return None
 
     def default_data_plugin(self, type):
-        typecfg = self._raw.get("plugins", {}).get("data", {}).get(type, {})
+        typecfg = self._data_plugin_by_suffix(type)
         default = typecfg.get("default")
         if default is None:
             raise exceptions.ConfigurationException("No default provided for '{x}'".format(x=type))
@@ -36,7 +49,8 @@ class Config(object):
         return plugin.load_class(classpath)
 
     def data_plugin(self, type, shape):
-        classpath = self._raw.get("plugins", {}).get("data", {}).get(type, {}).get("shapes", {}).get(shape)
+        typecfg = self._data_plugin_by_suffix(type)
+        classpath = typecfg.get("shapes", {}).get(shape)
         if classpath is None:
             raise exceptions.ConfigurationException("No shape '{x}' for type '{y}'".format(x=shape, y=type))
         return plugin.load_class(classpath)
@@ -88,8 +102,10 @@ class Data(object):
         self._data_sources = {}
 
     def add_ref(self, data_path):
-        filename = os.path.basename(data_path)
-        bits = filename.rsplit(".", 1)
+        dd = os.path.join(self._config.src_dir(), "data")
+        subpath = data_path[len(dd) + 1:]
+        # filename = os.path.basename(data_path)
+        bits = subpath.rsplit(".", 1)
         data_name = bits[0]
         type = bits[1]
 
@@ -142,6 +158,7 @@ class DataSource(object):
 class TableDataSource(DataSource):
     pass
 
+
 class DictDataSource(DataSource):
 
     def __init__(self, *args, **kwargs):
@@ -171,6 +188,15 @@ class DictDataSource(DataSource):
         if self._filter_fn is not None:
             return self._filter_fn(record)
         return True
+
+    def get(self, key, default=None):
+        return self._info.get("shapes", {}).get("dict", {}).get("data", {}).get(key, default)
+
+    def items(self):
+        return self._info.get("data", {}).items()
+
+    def __getitem__(self, item):
+        return self._info.get("data", {})[item]
 
 
 class Renderer(object):

@@ -9,22 +9,20 @@ class TableCSVDataSource(models.TableDataSource):
         self._info["shapes"]["table"] = {}
 
     def __iter__(self):
+        self._load_raw()
         local_data = self._info["shapes"]["table"]
-        local_data["idx"] = 0
-        if "data" in local_data:
-            return self
-
-        reader = utf8csv.UnicodeReader(self._info.get("path"))
-        local_data["data"] = []
-        for row in reader:
-            local_data["data"].append(row)
+        if "idx" not in local_data:
+            local_data["idx"] = 0
         return self
 
     def __next__(self):
         return self.next()
 
     def next(self):
+        self._load_raw()
         local_data = self._info["shapes"]["table"]
+        if "idx" not in local_data:
+            local_data["idx"] = 0
         idx = local_data["idx"]
         if len(local_data["data"]) > idx:
             record = local_data["data"][idx]
@@ -32,6 +30,18 @@ class TableCSVDataSource(models.TableDataSource):
             return record
         else:
             raise StopIteration()
+
+    def _load_raw(self):
+        local_data = self._info["shapes"]["table"]
+        if "data" in local_data:
+            return
+
+        with open(self._info.get("path"), "r", encoding="utf-8") as f:
+            reader = utf8csv.UnicodeReader(f)
+            local_data["data"] = []
+            for row in reader:
+                local_data["data"].append(row)
+        return
 
 
 class DictCSVDataSource(models.DictDataSource):

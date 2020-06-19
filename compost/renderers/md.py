@@ -58,7 +58,7 @@ class MarkdownExtension(Extension):
         return output.strip()
 
     def _render_markdown(self, block):
-        body = markdown.markdown(block, extensions=self._settings.get("extensions", []))
+        body = markdown.markdown(block, extensions=self._settings.get("settings", {}).get("extensions", []))
         return body
 
 
