@@ -6,6 +6,19 @@ from datetime import datetime
 import markdown
 
 
+def is_markdown(func):
+    def wrapper(*args, **kwargs):
+        body = func(*args, **kwargs)
+        return "{% markdown %}" + body + "{% endmarkdown %}"
+    return wrapper
+
+
+def is_inline_markdown(func):
+    def wrapper(*args, **kwargs):
+        body = func(*args, **kwargs)
+        return "{% mdinline %}" + body + "{% endmdinline %}"
+    return wrapper
+
 ###############################################
 ## Template Functions/Filters
 ###############################################
@@ -55,13 +68,9 @@ def toc():
     frag += "{% endmarkdown %}"
     return frag
 
-
+@is_markdown
 def ref(reference):
     """Insert a link to a reference in some unspecified references section"""
-    def _anchor_name(v):
-        v = v.lower().strip()
-        return v.replace(" ", "_")
-
     records = context.data.get("references").shape("dict")
     for entry in records:
         if entry.get("ID") == reference:
@@ -86,7 +95,7 @@ def header(name, level=1):
 
     return '<a name="' + number + '"></a>' + number + ". " + name
 
-
+@is_markdown
 def json_schema_definitions(data_handle):
     schema_doc = context.data.get(data_handle).shape("dict")
 
@@ -121,18 +130,20 @@ def json_schema_definitions(data_handle):
         desc = row[2]
         desc = desc.replace("\n", "<br>")
         frag += "| " + row[0] + " | " + row[1] + " | " + desc + " |\n"
-    return "{% markdown %}" + frag + "{% endmarkdown %}"
+    return frag
 
 
+@is_inline_markdown
 def section_link(header):
     toc = context.recall("toc")
     for k, v in toc.items():
         if v == header:
             return "[" + header + "](#" + k + ")"
-    return "{{ section_link('{x}') }}".format(x=header)
+    return '{% autoescape off %}{{ section_link("' + header + '") }}{% endautoescape %}'
     # raise exceptions.InconsistentStructureException("Unable to find header " + header)
 
 
+@is_markdown
 def sections(source, header_field, header_level, order, list_fields, intro):
     if not isinstance(order, list):
         order = [order]
@@ -184,10 +195,6 @@ def sections(source, header_field, header_level, order, list_fields, intro):
 
 
 def dl(source, term, definition, link=None, size=None, offset=0, filter_field=None, filters=None):
-    def _anchor_name(v):
-        v = v.lower().strip()
-        return v.replace(" ", "_")
-
     rows = context.data.get(source).shape("table")
     frag = "<dl>"
     offset = int(offset)
@@ -242,6 +249,7 @@ def dl(source, term, definition, link=None, size=None, offset=0, filter_field=No
     return frag
 
 
+@is_markdown
 def table(source):
     rows = context.data.get(source).shape("table")
     headers = rows.next()
@@ -253,8 +261,279 @@ def table(source):
     return frag
 
 
-###############################################
+def json_extract(source, keys=None, selector=None):
+    if keys is not None and not isinstance(keys, list):
+        keys = [keys]
 
+    bd = context.config.src_dir()
+    path = os.path.join(bd, source)
+    with open(path, "r", encoding="utf-8") as f:
+        js = json.loads(f.read())
+
+    if selector is not None:
+        js = js[selector]
+
+    show = {}
+    if keys is None:
+        show = js
+    else:
+        for key in keys:
+            if key in js:
+                show[key] = js[key]
+
+    out = json.dumps(show, indent=2)
+    return out
+
+
+def define(source, id):
+    rows = context.data.get(source).shape("table")
+    headers = rows.next()
+    for row in rows:
+        if row[0] == id:
+            return id + '<sup>[<a href="#' + _anchor_name(id) + '">def</a>]</sup>'
+    raise exceptions.InconsistentStructureException("Unable to find definition for " + id)
+
+
+@is_markdown
+def requirements(reqs, hierarchy, groups, match, output):
+    """
+    reqs=tables/requirements2.csv,
+    hierarchy=tables/reqs_hierarchy.csv,
+    groups=Request|Content|Resource,
+    match=Retrieve|Empty Body|Service-URL,
+    output=Protocol Operation|Request Requirements|Server Requirements|Response Requirements
+    """
+    if not isinstance(groups, list):
+        groups = [groups]
+    if not isinstance(match, list):
+        match = [match]
+    if not isinstance(output, list):
+        output = [output]
+
+    """
+    bd = config.get("src_dir")
+    reqs_path = os.path.join(bd, reqs)
+    hierarchy_path = os.path.join(bd, hierarchy)
+
+    headers = []
+    requirements = []
+    with codecs.open(reqs_path, "rb", "utf-8") as f:
+        reqs_reader = UnicodeReader(f)
+        headers = reqs_reader.next()
+        for row in reqs_reader:
+            requirements.append(row)
+
+    hei = []
+    with codecs.open(hierarchy_path, "rb", "utf-8") as f:
+        hierarchy_reader = UnicodeReader(f)
+        for row in hierarchy_reader:
+            hei.append(row)
+    """
+
+    requirements = context.data.get(reqs).shape("table")
+    hei = context.data.get(hierarchy).shape("table")
+    headers = requirements.next()
+
+    lookup = {}
+    for i in range(len(groups)):
+        group = groups[i]
+        m = match[i]
+        match_row = None
+        for row in hei:
+            broke = False
+            if row[0] == group:
+                for j in range(len(row) - 1, -1, -1):
+                    if row[j] == m:
+                        match_row = row
+                        broke = True
+                        break
+                if broke:
+                    break
+
+        if match_row is not None:
+            lookups = []
+            for i in range(len(match_row)):
+                if i == 0:
+                    continue
+                cell = match_row[i]
+                if cell != "":
+                    lookups.append(cell)
+
+            lookup[group] = lookups
+
+    idx = {}
+    for i in range(len(headers)):
+        h = headers[i]
+        for group in groups:
+            if h == group:
+                idx[group] = i
+                break
+        for o in output:
+            if "+" in o:
+                o = o.split("+")
+            if not isinstance(o, list):
+                o = [o]
+            for bit in o:
+                if h == bit:
+                    idx[bit] = i
+                    break
+
+    rs = []
+    for r in requirements:
+        score = 0
+        for group in groups:
+            if r[idx[group]] in lookup[group]:
+                score += 1
+        if score != len(groups):
+            continue
+        result = []
+        for o in output:
+            if "+" in o:
+                o = o.split("+")
+                text = ""
+                for bit in o:
+                    text += bit + " - "
+                result.append(text)
+            else:
+                result.append(r[idx[o]])
+        rs.append(result)
+
+    sections = {}
+    for r in rs:
+        for i in range(len(output)):
+            o = output[i]
+            if o not in sections:
+                sections[o] = []
+            v = r[i]
+            if v != "":
+                sections[o].append(v)
+
+    frag = ""
+    for key in output:
+        reqs = sections[key]
+        if len(reqs) == 0:
+            continue
+        frag += "**" + key + "**\n\n"
+        for req in reqs:
+            frag += " * " + req.replace("\n", "<br>") + "\n"
+        frag += "\n"
+    return frag
+
+
+def content_disposition(reqs, hierarchy, groups, match):
+    """
+    bd = config.get("src_dir")
+    reqs_path = os.path.join(bd, reqs)
+    hierarchy_path = os.path.join(bd, hierarchy)
+
+    headers = []
+    requirements = []
+    with codecs.open(reqs_path, "rb", "utf-8") as f:
+        reqs_reader = UnicodeReader(f)
+        headers = reqs_reader.next()
+        for row in reqs_reader:
+            requirements.append(row)
+
+    hei = []
+    with codecs.open(hierarchy_path, "rb", "utf-8") as f:
+        hierarchy_reader = UnicodeReader(f)
+        for row in hierarchy_reader:
+            hei.append(row)
+    """
+
+    requirements = context.data.get(reqs).shape("table")
+    hei = context.data.get(hierarchy).shape("table")
+    headers = requirements.next()
+
+    lookup = {}
+    for i in range(len(groups)):
+        group = groups[i]
+        m = match[i]
+        match_row = None
+        hei.reset()
+        for row in hei:
+            broke = False
+            if row[0] == group:
+                for j in range(len(row) - 1, -1, -1):
+                    if row[j] == m:
+                        match_row = row
+                        broke = True
+                        break
+                if broke:
+                    break
+
+        if match_row is not None:
+            lookups = []
+            for i in range(len(match_row)):
+                if i == 0:
+                    continue
+                cell = match_row[i]
+                if cell != "":
+                    lookups.append(cell)
+
+            lookup[group] = lookups
+
+    output = ["Disposition Type", "Param"]
+    idx = {}
+    for i in range(len(headers)):
+        h = headers[i]
+        for group in groups:
+            if h == group:
+                idx[group] = i
+                break
+        for o in output:
+            if "+" in o:
+                o = o.split("+")
+            if not isinstance(o, list):
+                o = [o]
+            for bit in o:
+                if h == bit:
+                    idx[bit] = i
+                    break
+
+    rs = []
+    for r in requirements:
+        score = 0
+        for group in groups:
+            if r[idx[group]] in lookup[group]:
+                score += 1
+        if score != len(groups):
+            continue
+        result = []
+        for o in output:
+            if "+" in o:
+                o = o.split("+")
+                text = ""
+                for bit in o:
+                    text += bit + " - "
+                result.append(text)
+            else:
+                result.append(r[idx[o]])
+        rs.append(result)
+
+    sections = {}
+    for r in rs:
+        for i in range(len(output)):
+            o = output[i]
+            if o not in sections:
+                sections[o] = []
+            v = r[i]
+            if v != "":
+                sections[o].append(v)
+
+    parts = [sections["Disposition Type"][0]] + sections["Param"]
+    return "Content-Disposition: " + "; ".join(parts)
+
+
+###############################################
+# shared (internal) utilities
+
+def _anchor_name(v):
+    v = v.lower().strip()
+    return v.replace(" ", "_")
+
+
+##############################################
 
 def rel2abs(file, *args):
     file = os.path.realpath(file)
@@ -280,6 +559,7 @@ def merge_dicts(target, source):
         else:
             target[k] = source[k]
     return target
+
 
 class RendererJSONEncoder(json.JSONEncoder):
     def default(self, o):

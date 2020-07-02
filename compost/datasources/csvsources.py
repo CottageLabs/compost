@@ -18,6 +18,10 @@ class TableCSVDataSource(models.TableDataSource):
     def __next__(self):
         return self.next()
 
+    def reset(self):
+        local_data = self._info["shapes"]["table"]
+        local_data["idx"] = 0
+
     def next(self):
         self._load_raw()
         local_data = self._info["shapes"]["table"]
@@ -29,6 +33,7 @@ class TableCSVDataSource(models.TableDataSource):
             local_data["idx"] = idx + 1
             return record
         else:
+            local_data["idx"] = 0
             raise StopIteration()
 
     def _load_raw(self):

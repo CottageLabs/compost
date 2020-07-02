@@ -15,17 +15,14 @@ class MarkdownExtension(Extension):
     def __init__(self, environment):
         super(MarkdownExtension, self).__init__(environment)
         self._settings = None
-        # self._settings = environment.globals.config.settings_for_tag("markdown")
-        #environment.extend(
-        #    markdowner=markdown.Markdown(extensions=['extra'])
-        #)
+        self._end_name = "name:endmarkdown"
 
     def parse(self, parser):
         if self._settings is None:
             self._settings = self.environment.globals.get("config").settings_for_tag("markdown")
         lineno = next(parser.stream).lineno
         body = parser.parse_statements(
-            ['name:endmarkdown'],
+            [self._end_name],
             drop_needle=True
         )
         return CallBlock(
@@ -61,6 +58,21 @@ class MarkdownExtension(Extension):
         body = markdown.markdown(block, extensions=self._settings.get("settings", {}).get("extensions", []))
         return body
 
+
+class MarkdownInlineExtension(MarkdownExtension):
+    tags = {"mdinline"}
+
+    def __init__(self, environment):
+        super(MarkdownInlineExtension, self).__init__(environment)
+        self._end_name = "name:endmdinline"
+
+    def _render_markdown(self, block):
+        body = super(MarkdownInlineExtension, self)._render_markdown(block)
+        if body.startswith("<p>"):
+            body = body[3:]
+        if body.endswith("</p>"):
+            body = body[:-4]
+        return body
 
 """
 class MarkdownRenderer(Renderer):

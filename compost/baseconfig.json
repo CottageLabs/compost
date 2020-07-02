@@ -38,7 +38,8 @@
             },
             "md-inline" : {
                 "file_suffixes" : [],
-                "inline_tag" : "mdin",
+                "jinja2_tag" : "mdinline",
+                "jinja2_extension" : "compost.renderers.md.MarkdownInlineExtension",
                 "class" : "compost.renderers.md.MarkdownInlineRenderer",
                 "settings" : {
                     "extensions" : [
@@ -86,6 +87,18 @@
         },
         "table" : {
             "function" : "compost.utils.table"
+        },
+        "json_extract" : {
+            "function" : "compost.utils.json_extract"
+        },
+        "define" : {
+            "function" : "compost.utils.define"
+        },
+        "requirements" : {
+            "function" : "compost.utils.requirements"
+        },
+        "content_disposition" : {
+            "function" : "compost.utils.content_disposition"
         }
     },
 
