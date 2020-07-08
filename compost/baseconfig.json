@@ -97,6 +97,12 @@
         "requirements" : {
             "function" : "compost.utils.requirements"
         },
+        "requirements_hierarchy" : {
+            "function" : "compost.utils.requirements_hierarchy"
+        },
+        "requirements_table_2" : {
+            "function" : "compost.utils.requirements_table_2"
+        },
         "content_disposition" : {
             "function" : "compost.utils.content_disposition"
         }

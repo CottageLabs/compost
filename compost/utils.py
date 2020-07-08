@@ -54,10 +54,13 @@ def now(format):
     return datetime.utcnow().strftime(format)
 
 
-def toc():
-    toc = context.recall("toc")
+def toc(id="main"):
+    tocs = context.recall("tocs", {})
+    toc = tocs.get(id)
+
+    # toc = context.recall("toc")
     if toc is None:
-        return "{{ toc() }}"
+        return '{% autoescape off %}{{ toc("' + id + '") }}{% endautoescape %}'
 
     numbers = list(toc.keys())
     numbers.sort(key=lambda s: [int(u) for u in s.split('.') if u.strip() != ""])
@@ -68,7 +71,8 @@ def toc():
     frag += "{% endmarkdown %}"
     return frag
 
-@is_markdown
+
+@is_inline_markdown
 def ref(reference):
     """Insert a link to a reference in some unspecified references section"""
     records = context.data.get("references").shape("dict")
@@ -77,23 +81,34 @@ def ref(reference):
             return "[[" + reference + "](#" + _anchor_name(reference) + ")]"
 
 
-def header(name, level=1):
-    current = context.recall("current_header", [0])
+def header(name, level=1, toc="main"):
+    registry = context.recall("header_registry", {})
+    current = registry.get(toc, [0])
+    # current = context.recall("current_header", [0])
     idx = level - 1
     if len(current) < level:
         current += [0] * (level - len(current))
     current[idx] += 1
     for i in range(idx + 1, len(current)):
         current[i] = 0
-    context.remember("current_header", current)
+
+    registry[toc] = current
+    context.remember("header_registry", registry)
 
     number = ".".join([str(x) for x in current if x != 0])
 
-    toc = context.recall("toc", {})
-    toc[number] = name
-    context.remember("toc", toc)
+    tocs = context.recall("tocs", {})
+    tocinst = tocs.get(toc, {})
+    tocinst[number] = name
+    tocs[toc] = tocinst
+    context.remember("tocs", tocs)
+
+    #toc = context.recall("toc", {})
+    #toc[number] = name
+    #context.remember("toc", toc)
 
     return '<a name="' + number + '"></a>' + number + ". " + name
+
 
 @is_markdown
 def json_schema_definitions(data_handle):
@@ -134,12 +149,15 @@ def json_schema_definitions(data_handle):
 
 
 @is_inline_markdown
-def section_link(header):
-    toc = context.recall("toc")
-    for k, v in toc.items():
+def section_link(header, toc="main"):
+    tocs = context.recall("tocs", {})
+    tocinst = tocs.get(toc, {})
+
+    # toc = context.recall("toc")
+    for k, v in tocinst.items():
         if v == header:
             return "[" + header + "](#" + k + ")"
-    return '{% autoescape off %}{{ section_link("' + header + '") }}{% endautoescape %}'
+    return '{% autoescape off %}{{ section_link("' + header + '", "' + toc + '") }}{% endautoescape %}'
     # raise exceptions.InconsistentStructureException("Unable to find header " + header)
 
 
@@ -261,7 +279,7 @@ def table(source):
     return frag
 
 
-def json_extract(source, keys=None, selector=None):
+def json_extract(source, keys=None, selector=None, listobj_match=None, unwrap_single_entry_list=False):
     if keys is not None and not isinstance(keys, list):
         keys = [keys]
 
@@ -280,6 +298,17 @@ def json_extract(source, keys=None, selector=None):
         for key in keys:
             if key in js:
                 show[key] = js[key]
+
+    if listobj_match is not None:
+        keep = []
+        for obj in show:
+            for k, v in listobj_match.items():
+                if obj.get(k) == v:
+                    keep.append(obj)
+        show = keep
+
+    if isinstance(show, list) and len(show) == 1 and unwrap_single_entry_list:
+        show = show[0]
 
     out = json.dumps(show, indent=2)
     return out
@@ -309,26 +338,6 @@ def requirements(reqs, hierarchy, groups, match, output):
         match = [match]
     if not isinstance(output, list):
         output = [output]
-
-    """
-    bd = config.get("src_dir")
-    reqs_path = os.path.join(bd, reqs)
-    hierarchy_path = os.path.join(bd, hierarchy)
-
-    headers = []
-    requirements = []
-    with codecs.open(reqs_path, "rb", "utf-8") as f:
-        reqs_reader = UnicodeReader(f)
-        headers = reqs_reader.next()
-        for row in reqs_reader:
-            requirements.append(row)
-
-    hei = []
-    with codecs.open(hierarchy_path, "rb", "utf-8") as f:
-        hierarchy_reader = UnicodeReader(f)
-        for row in hierarchy_reader:
-            hei.append(row)
-    """
 
     requirements = context.data.get(reqs).shape("table")
     hei = context.data.get(hierarchy).shape("table")
@@ -420,27 +429,113 @@ def requirements(reqs, hierarchy, groups, match, output):
     return frag
 
 
+def requirements_hierarchy(source, key):
+    rows = context.data.get(source).shape("table")
+    filtered = []
+    for row in rows:
+        if row[0] == key:
+            filtered.append(row[1:])
+
+    h = {}
+    c = h
+    for row in filtered:
+        for cell in row:
+            if cell == "":
+                break
+            if cell not in c:
+                c[cell] = {}
+            c = c[cell]
+        c = h
+
+    def _recurse_heirarchy(node, depth):
+        frag = ""
+        for k, v in node.items():
+            if k == "*":
+                k = "All"
+            frag += "\t" * (depth - 1) + "* " + k.replace("*", "\*") + "\n"
+            if len(v.keys()) != 0:
+                frag += _recurse_heirarchy(v, depth + 1)
+        return frag
+
+    frag = _recurse_heirarchy(h, 1)
+    return frag
+
+
+@is_markdown
+def requirements_table_2(source, vectors, reqs):
+    if not isinstance(vectors, list):
+        vectors = [vectors]
+    if not isinstance(reqs, list):
+        reqs = [reqs]
+
+    reader = context.data.get(source)
+    defs = {}
+    headers = reader.next()
+
+    idx = {}
+    for i in range(len(headers)):
+        h = headers[i]
+        for v in vectors:
+            if h == v:
+                idx[v] = i
+                break
+        for r in reqs:
+            if h == r:
+                idx[r] = i
+                break
+
+    vector_sections = []
+    expanded_requirements = {}
+    for row in reader:
+        vector_section = []
+        for v in vectors:
+            vector_section.append(row[idx[v]])
+        if not vector_section in vector_sections:
+            vector_sections.append(vector_section)
+        id = vector_sections.index(vector_section)
+        if id not in expanded_requirements:
+            expanded_requirements[id] = {}
+        for r in reqs:
+            if r not in expanded_requirements[id]:
+                expanded_requirements[id][r] = []
+            val = row[idx[r]]
+            if val != "" and val not in expanded_requirements[id][r]:
+                expanded_requirements[id][r].append(val)
+
+    frag = ""
+    for i in range(len(vector_sections)):
+        vs = vector_sections[i]
+        ctx = expanded_requirements[i]
+
+        frag += "**Request Conditions**:\n\n"
+        for j in range(len(vs)):
+            vname = vs[j]
+            vtype = vectors[j]
+            if vname == "*":
+                vname = "All"
+            frag += "* **" + vtype + "**: " + vname + "\n"
+        frag += "\n"
+
+        for r in reqs:
+            vals = ctx[r]
+            if len(vals) == 0:
+                continue
+            cell = ""
+            for v in vals:
+                deftext = ""
+                if r in defs:
+                    deftext = " - " + defs[r][v]
+                cell += "* " + v + deftext + "\n"
+
+            frag += "**" + r + "**\n\n"
+            frag += cell + "\n"
+
+        frag += "<hr>"
+
+    return frag
+
+
 def content_disposition(reqs, hierarchy, groups, match):
-    """
-    bd = config.get("src_dir")
-    reqs_path = os.path.join(bd, reqs)
-    hierarchy_path = os.path.join(bd, hierarchy)
-
-    headers = []
-    requirements = []
-    with codecs.open(reqs_path, "rb", "utf-8") as f:
-        reqs_reader = UnicodeReader(f)
-        headers = reqs_reader.next()
-        for row in reqs_reader:
-            requirements.append(row)
-
-    hei = []
-    with codecs.open(hierarchy_path, "rb", "utf-8") as f:
-        hierarchy_reader = UnicodeReader(f)
-        for row in hierarchy_reader:
-            hei.append(row)
-    """
-
     requirements = context.data.get(reqs).shape("table")
     hei = context.data.get(hierarchy).shape("table")
     headers = requirements.next()

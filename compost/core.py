@@ -117,7 +117,7 @@ def _compile_templates():
     # set up the initial environment with the essential globals
     env = Environment(
         loader=MarkupWrapperLoader(FileSystemLoader([content_path, templates_path]), config),
-        autoescape=select_autoescape(['html']),
+        autoescape=False,# select_autoescape(['html'], default_for_string=False),
         extensions=extensions
     )
     env.globals.update(
