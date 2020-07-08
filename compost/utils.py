@@ -462,14 +462,21 @@ def requirements_hierarchy(source, key):
 
 
 @is_markdown
-def requirements_table_2(source, vectors, reqs):
+def requirements_table_2(source, vectors, reqs, definitions=None):
     if not isinstance(vectors, list):
         vectors = [vectors]
     if not isinstance(reqs, list):
         reqs = [reqs]
 
-    reader = context.data.get(source)
     defs = {}
+    if definitions is not None:
+        reader = context.data.get(definitions).shape("table")
+        headers = reader.next()
+        defs = {headers[0] : {}}
+        for row in reader:
+            defs[headers[0]][row[0]] = row[1].replace("*", "\*")
+
+    reader = context.data.get(source).shape("table")
     headers = reader.next()
 
     idx = {}
