@@ -68,7 +68,8 @@
             "function" : "compost.utils.toc"
         },
         "ref" : {
-            "function" : "compost.utils.ref"
+            "function" : "compost.utils.ref",
+            "source" : "tables/references"
         },
         "header" : {
             "function" : "compost.utils.header"
@@ -105,6 +106,32 @@
         },
         "content_disposition" : {
             "function" : "compost.utils.content_disposition"
+        },
+        "openapi_list_descriptions" : {
+            "function" : "compost.utils.openapi_list_descriptions"
+        },
+        "openapi_paths" : {
+            "function" : "compost.utils.openapi_paths"
+        },
+        "table_rows_as_paras" : {
+            "function" : "compost.utils.table_rows_as_paras"
+        },
+        "anchor_link" : {
+            "function" : "compost.utils.anchor_link",
+            "anchor_prefix" : "",
+            "target_document" : ""
+        },
+        "http_exchange" : {
+            "function" : "compost.utils.http_exchange"
+        },
+        "img" : {
+            "function" : "compost.utils.img"
+        },
+        "fig" : {
+            "function" : "compost.utils.fig"
+        },
+        "ul" : {
+            "function" : "compost.utils.ul"
         }
     },
 

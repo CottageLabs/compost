@@ -63,6 +63,10 @@ class DictCSVDataSource(models.DictDataSource):
     def __next__(self):
         return self.next()
 
+    def reset(self):
+        local_data = self._info["shapes"]["dict"]
+        local_data["idx"] = 0
+
     def next(self):
         self._prep_iterator()
         local_data = self._info["shapes"]["dict"]

@@ -27,12 +27,12 @@ def url_for(source_file, anchor=None):
     base = "/"
     settings = context.config.util_properties("url_for")
     if settings.get("include_base_url", True):
-        base = context.config.base_url
+        base = context.config.base_url()
     if not settings.get("include_file_suffix", True):
         source_file = source_file.rsplit(".", 1)[0]
     url = base + source_file
     if anchor is not None:
-        url = "#" + anchor
+        url = url + "#" + anchor
     return url
 
 
@@ -64,7 +64,7 @@ def toc(id="main"):
 
     numbers = list(toc.keys())
     numbers.sort(key=lambda s: [int(u) for u in s.split('.') if u.strip() != ""])
-    frag = "{% markdown %}"
+    frag = "{% markdown %}\n"
     for n in numbers:
         indent = len(n.split(".")) - 1
         frag += "\t" * indent + "* [" + n + ". " + toc[n] + "](#" + n + ")\n"
@@ -75,7 +75,8 @@ def toc(id="main"):
 @is_inline_markdown
 def ref(reference):
     """Insert a link to a reference in some unspecified references section"""
-    records = context.data.get("references").shape("dict")
+    settings = context.config.util_properties("ref")
+    records = context.data.get(settings.get("source", "references")).shape("dict")
     for entry in records:
         if entry.get("ID") == reference:
             return "[[" + reference + "](#" + _anchor_name(reference) + ")]"
@@ -268,20 +269,30 @@ def dl(source, term, definition, link=None, size=None, offset=0, filter_field=No
 
 
 @is_markdown
-def table(source):
+def table(source, anchor=None, anchor_prefix=""):
     rows = context.data.get(source).shape("table")
     headers = rows.next()
     frag = "| " + " | ".join(headers) + " |\n"
     frag += "| " + "--- |" * len(headers) + "\n"
     for row in rows:
         linified_row = [cell.replace("\n", "<br>") for cell in row]
+        if anchor is not None:
+            v = linified_row[anchor]
+            linified_row[anchor] = '<a name="' + anchor_prefix + _anchor_name(v) + '">' + v + '</a>'
         frag += "| " + " | ".join(linified_row) + " |\n"
     return frag
 
 
-def json_extract(source, keys=None, selector=None, listobj_match=None, unwrap_single_entry_list=False):
+def json_extract(source, keys=None, exclude=None, selector=None, listobj_match=None, unwrap_single_entry_list=False, insert=None):
     if keys is not None and not isinstance(keys, list):
         keys = [keys]
+    include = keys
+
+    if exclude is not None and not isinstance(exclude, list):
+        exclude = [exclude]
+
+    if insert is None:
+        insert = {}
 
     bd = context.config.src_dir()
     path = os.path.join(bd, source)
@@ -292,12 +303,17 @@ def json_extract(source, keys=None, selector=None, listobj_match=None, unwrap_si
         js = js[selector]
 
     show = {}
-    if keys is None:
+    if include is None:
         show = js
     else:
-        for key in keys:
+        for key in include:
             if key in js:
                 show[key] = js[key]
+
+    if exclude is not None:
+        for key in exclude:
+            if key in show:
+                del show[key]
 
     if listobj_match is not None:
         keep = []
@@ -310,7 +326,9 @@ def json_extract(source, keys=None, selector=None, listobj_match=None, unwrap_si
     if isinstance(show, list) and len(show) == 1 and unwrap_single_entry_list:
         show = show[0]
 
-    out = json.dumps(show, indent=2)
+    show.update(insert)
+
+    out = json.dumps(show, indent=2, sort_keys=True)
     return out
 
 
@@ -626,6 +644,286 @@ def content_disposition(reqs, hierarchy, groups, match):
     parts = [sections["Disposition Type"][0]] + sections["Param"]
     return "Content-Disposition: " + "; ".join(parts)
 
+
+def openapi_list_descriptions(source, field, keys,
+                              expand_source=None, expand_on=None, expand_field=None, expand_prefix="", expand_suffix="",
+                              expand_anchor=False, expand_anchor_prefix=""):
+    expand = None
+    if expand_source is not None:
+        expand = context.data.get(expand_source).shape("dict")
+
+    api = context.data.get(source).shape("dict")
+    bits = field.split(".")
+    for bit in bits:
+        api = api.get(bit)
+
+    frag = ""
+
+    if not isinstance(keys, list):
+        keys = [keys]
+    for key in keys:
+        desc = api.get(key).get("description")
+
+        additional = []
+        if expand is not None:
+            expand.reset()
+            for e in expand:
+                if e.get(expand_on) == key:
+                    v = e.get(expand_field)
+                    if expand_anchor:
+                        ank = expand_anchor_prefix + _anchor_name(v)
+                        v = '<a href="#' + ank + '">' + v + '</a>'
+                    additional.append(v)
+            if len(additional) > 0:
+                desc += expand_prefix + ", ".join(additional) + expand_suffix
+
+        frag += " * " + desc + "\n"
+
+    return frag
+
+
+def openapi_paths(source, path_order=None, method_order=None, header_depth=1, omit=None, in_brief=None):
+    if method_order is None:
+        method_order = ["get", "post", "put", "delete"]
+    header_depth = int(header_depth)
+
+    api = context.data.get(source).shape("dict")
+
+    paths = api.get("paths")
+    path_names = paths.keys()
+    if path_order is not None:
+        path_names = ["/" + po for po in path_order]
+    frag = ""
+    for pn in path_names:
+        path_info = paths.get(pn)
+        if path_info is None:
+            continue
+        for method in method_order:
+            method_info = path_info.get(method)
+            if method_info is None:
+                continue
+            frag += _render_method_info(header_depth, pn, method, method_info, omit, in_brief)
+
+    return frag
+
+
+def _render_method_info(header_depth, path_name, method, method_info, omit=None, in_brief=None):
+    htext = header(method.upper() + " " + path_name[1:], header_depth)
+    frag = "#" * header_depth + htext + "\n\n"
+    frag += '<div class="openapi">{% markdown %}'
+    frag += method_info.get("summary", "") + "\n\n"
+    frag += "**Headers**\n\n"
+
+    for param in method_info.get("parameters", []):
+        if param.get("in") != "header":
+            continue
+        frag += " * " + param.get("name") + "\n"
+    frag += "\n"
+
+    rb = method_info.get("requestBody")
+    if rb is not None:
+        frag += "**Body**\n\n"
+        frag += rb.get("description", "") + "\n\n"
+
+    frag += "**Responses**\n\n"
+
+    frag += "| Code | Description |\n"
+    frag += "| ---- | ----------- |\n"
+    codes = method_info.get("responses", [])
+    keys = codes.keys()
+    keys = sorted(keys)
+    for code in keys:
+        if code in omit:
+            continue
+        if code in in_brief:
+            code_info = codes.get(code)
+            frag += "| " + code + " | " + code_info.get("description", "") + " |\n"
+        else:
+            code_info = codes.get(code)
+            frag += "| " + code + " | " + code_info.get("description", "") + "<br><br>"
+
+            headers = code_info.get("headers", [])
+            if len(headers) > 0:
+                frag += "**Headers**"
+                frag += "<ul>"
+                for h, hobj in headers.items():
+                    frag += "<li>" + h + " - " + hobj.get("description") + "</li>"
+                frag += "</ul>"
+
+            frag += "**Body**<ul>"
+            content = code_info.get("content", [])
+            if len(content) > 0:
+                for ct, cobj in content.items():
+                    ct = ct.replace("*", "\*")
+                    frag += "<li>" + ct + "</li>"
+            else:
+                frag += "<li>None</li>"
+            frag += "</ul> |\n"
+
+    frag += "{% endmarkdown %}</div>"
+    return frag + "\n\n"
+
+
+@is_markdown
+def table_rows_as_paras(source, links=None, bold=None, anchor=None):
+    reader = context.data.get(source).shape("table")
+    paras = []
+    headers = reader.next()
+
+    for row in reader:
+        para = ""
+        for i in range(len(row)):
+            col = row[i]
+            name = headers[i]
+
+            a = ""
+            if name == anchor and anchor is not None:
+                a = '<a name="' + _anchor_name(col) + '">'
+
+            if name == links and links is not None:
+                col = "[" + col + "](" + col + ")"
+            if name == bold and bold is not None:
+                col = "**" + col + "**"
+
+            para += a + col + " "
+        paras.append(para)
+
+    return "\n\n".join(paras)
+
+
+@is_inline_markdown
+def anchor_link(error):
+    settings = context.config.util_properties("anchor_link")
+    prefix = settings.get("anchor_prefix")
+    target = settings.get("target_document")
+    ank = prefix + _anchor_name(error)
+    url = url_for(target, ank)
+    return "[" + error + "](" + url + ")"
+
+
+@is_markdown
+def http_exchange(source, method, url, response, include_headers=None, request_body=None, request_headers=None, response_headers=None):
+    if include_headers is not None:
+        if not isinstance(include_headers, list):
+            include_headers = [include_headers]
+    else:
+        include_headers = []
+
+    response = str(response)
+
+    if request_headers is None:
+        request_headers = {}
+
+    if response_headers is None:
+        response_headers = {}
+
+    frag = method.upper() + " " + url + " HTTP/1.1\n"
+    api = context.data.get(source).shape("dict")
+    paths = api.get("paths")
+    path = paths.get(url)
+    request = path.get(method)
+
+    headers = [p for p in request.get("parameters", []) if p.get("in") == "header"]
+    if include_headers is not None:
+        headers = [h for h in headers if h.get("name") in include_headers]
+    for h in headers:
+        val = request_headers.get(h.get("name"), "...")
+        frag += h.get("name") + ": " + val + "\n"
+
+    if request_body is None:
+        request_body = request.get("requestBody", {}).get("description")
+    if request_body is not None:
+        frag += "\n"
+        frag += "[" + request_body + "]\n"
+
+    frag += "\n-----\n"
+
+    frag += "HTTP/1.1 " + str(response) + "\n"
+    resp = request.get("responses", {}).get(response, {})
+    resp_headers = resp.get("headers", {}).keys()
+    resp_headers = [h for h in resp_headers if h in include_headers]
+    for rh in resp_headers:
+        val = response_headers.get(rh, "...")
+        frag += rh + ": " + val + "\n"
+    cts = list(resp.get("content", {}).keys())
+    if len(cts) > 0:
+        frag += "Content-Type: " + cts[0] + "\n"
+    frag += "\n"
+    frag += "[" + resp.get("description", "Empty Body") + "]\n"
+
+    return frag
+
+
+def img(target, alt=None):
+    base = context.config.base_url()
+    altText = ""
+    if alt is not None:
+        altText = alt
+    frag = '<div><img src="' + base + target + '" alt="' + altText + '"></div>'
+    return frag
+
+
+def fig(target, alt=None):
+    frag = img(target, alt)
+    if alt is not None:
+        figs = context.recall("figures", [])
+        altText = "Figure " + str(len(figs) + 1) + ": " + alt
+        frag += '<div class="figure_label">' + altText + '</div>'
+        figs.append(alt)
+        context.remember("figures", figs)
+
+    return frag
+
+
+def ul(source, field, link=None, size=None, offset=0, filter_field=None, filters=None):
+
+    frag = "<ul>"
+    offset = int(offset)
+    if size is not None:
+        size = int(size)
+    if filters is not None:
+        if not isinstance(filters, list):
+            filters = [filters]
+
+    reader = context.data.get(source).shape("table")
+    headers = reader.next()
+
+    filter_idx = -1
+    if filter_field is not None:
+        for i in range(len(headers)):
+            if headers[i] == filter_field:
+                filter_idx = i
+
+    n = 0
+    for row in reader:
+        if filter_field is not None:
+            val = row[filter_idx]
+            if val not in filters:
+                continue
+
+        if size is not None and n >= size + offset:
+            break
+        n += 1
+        if n < offset + 1:
+            continue
+
+        li = None
+        a = ""
+        for i in range(len(row)):
+            col = row[i]
+            name = headers[i]
+            if name == field:
+                a = '<a name="' + _anchor_name(col) + '"></a>'
+            if name == link:
+                col = "[" + col + "](" + col + ")"
+            if name == field:
+                li = col
+                continue
+        li = markdown.markdown(li)[3:-4]    # removes the <p> and </p> markdown inserts
+        frag += "<li>" + a + li + "</li>"
+
+    frag += "</ul>"
+    return frag
 
 ###############################################
 # shared (internal) utilities
